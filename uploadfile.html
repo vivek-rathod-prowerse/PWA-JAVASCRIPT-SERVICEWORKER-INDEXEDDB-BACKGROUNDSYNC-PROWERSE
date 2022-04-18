@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+<label role="button">
+    Upload a picture
+    <input accept="image/*" type="file" hidden/>
+</label>
+
+<script>
+    const input = document.querySelector(`input[type="file"]`);
+
+    function upload() {
+        fetch('http://localhost:63342/DEMO/index.html', {method: "PUT", body: input.files[0]});
+    }
+
+    input.addEventListener("change", upload);
+</script>
+
+
+<script src='js.js'></script>
+</body>
+</html>

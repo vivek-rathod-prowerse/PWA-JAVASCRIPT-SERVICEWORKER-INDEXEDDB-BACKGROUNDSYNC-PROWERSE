@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>IndexedDB demo</title>
+</head>
+<body>
+
+ID: <input type="text" id="textid">
+TOPIC: <input type="text" id="texttopic">
+
+<button id="btnADD">Add Unique Data</button>
+<br>
+<button id="btnVIEW">VIEW Your Data</button>
+<input type="file" id="pictureTest" capture>
+<br>
+<p id="dataID"></p>
+
+<h2>Test Image Below</h2>
+DATA ID: <input type="text" id="recordToLoad">
+<button id="btnVIEWFILE">Test</button>
+
+<img id="testImage" style="max-width: 40%;">
+
+<script>
+
+    //sync part ------------------------------------------------------------
+
+    //function to see status of user
+    function updateOnlineStatus(event) {
+        var online = navigator.onLine;
+        //document.getElementById("network").innerHTML = online ? 'Online' : 'Offline';
+        window.console(`SYSTEM IS : ${online}`)
+    }
+
+    //function if serviceworker exist
+    /*navigator.serviceWorker.ready.then(registration => {
+        if (registration.sync) {
+            window.alert('Background Sync Supported Brooo! :) ...')
+        } else {
+            window.alert('Background Sync Is Not Supported Brooo! :( ...')
+        }
+    });*/
+
+
+
+    //get data from url and send it to server
+    //const URL = application_endpoint_url;
+
+    // get data from indexedb
+    function getDbData() {
+
+        console.log('fired getDbData Method in Sync... ')
+        let transaction = db.transaction("articles", "readwrite");
+        // Access an object store
+        let articles = transaction.objectStore("articles");
+        const request = articles.openCursor();
+        const MainData = [];
+        request.onsuccess = e => {
+            const cursor = e.target.result
+            if (cursor) {
+                //alert(`ID: ${cursor.key} Topics: ${cursor.value.text} `)
+                console.log(`indexeddb data : keys: ${cursor.key} and values: ${cursor.value.text}`);
+                MainData.push(cursor.key + cursor.value.text);
+                sendDataToServer(cursor.value, cursor.key);
+                cursor.continue()
+            }
+            document.getElementById('dataID').innerHTML = MainData;
+        }
+        request.onerror = function (error) {
+            console.error('IndexedDB error:', error)
+        }
+
+        // order sent to the server
+        function sendDataToServer(data, index) {
+            fetch('index.html', {
+                method: 'POST',
+                body: JSON.stringify(data),
+            }).then((response) => {
+                if (response) {
+                    console.log(`delete data here... ${index}`)
+                    //deleteFromIndexdb(index)
+                }
+            });
+        }
+    }
+
+
+    //----------------------------------------------------------------------------
+
+
+    let db = null;
+
+    //handle Add data Button
+    const AddBTN = document.getElementById('btnADD');
+    AddBTN.addEventListener("click", AddData);
+
+    //handle View Button Event
+    const ViewBTN = document.getElementById('btnVIEW');
+    ViewBTN.addEventListener("click", viewData);
+
+    //handle upload file Event
+    document.querySelector('#pictureTest').addEventListener('change', doFile);
+
+    //handle View Image/File Event
+    const ViewFileBTN = document.getElementById('btnVIEWFILE');
+    ViewFileBTN.addEventListener("click", ViewFILE);
+
+
+    //view image / file
+    function ViewFILE() {
+        let image = document.querySelector('#testImage');
+        let recordToLoad = document.getElementById('recordToLoad').value;
+        let trans = db.transaction("articles", "readwrite");
+        let req = trans.objectStore("articles").get(recordToLoad);
+
+        req.onsuccess = function (e) {
+            let record = e.target.result;
+            console.log('get success', record);
+            image.src = 'data:image/jpeg;base64,' + btoa(record.data);
+        }
+
+    }
+
+    //upload file
+    function doFile(e) {
+        console.log('change event fired for input field');
+        let file = e.target.files[0];
+        var reader = new FileReader();
+        //reader.readAsDataURL(file);
+        reader.readAsBinaryString(file);
+
+        reader.onload = function (e) {
+            //alert(e.target.result);
+            let bits = e.target.result;
+            let ob = {
+                id: "DATA: " + Math.random(),
+                created: new Date(),
+                data: bits
+            };
+
+            let trans = db.transaction(['articles'], 'readwrite');
+            let addReq = trans.objectStore('articles');
+            let request = addReq.add(ob);
+
+
+            addReq.onerror = function (e) {
+                console.log('error storing data');
+                console.error(e);
+            }
+
+            trans.oncomplete = function (e) {
+                console.log('data stored');
+            }
+        }
+    }
+
+    //function to add data
+    function AddData() {
+        let transaction = db.transaction("articles", "readwrite");
+        // Access an object store
+        let articles = transaction.objectStore("articles");
+
+        // Create an object
+        let article = {
+            id: document.getElementById('textid').value,
+            topic: document.getElementById('texttopic').value
+        };
+        // Add an object
+        let request = articles.add(article);
+    }
+
+    //function ro view the data
+    function viewData() {
+
+        let transaction = db.transaction("articles", "readwrite");
+        // Access an object store
+        let articles = transaction.objectStore("articles");
+        const request = articles.openCursor();
+
+        const MainData = [];
+
+        request.onsuccess = e => {
+            const cursor = e.target.result
+            if (cursor) {
+                //alert(`ID: ${cursor.key} Topics: ${cursor.value.text} `)
+                MainData.push(cursor.key + cursor.value.text);
+                cursor.continue()
+            }
+
+            document.getElementById('dataID').innerHTML = MainData;
+
+        }
+
+    }
+
+    let request = indexedDB.open("DATABASE1", 1);
+
+    request.onupgradeneeded = function () {
+        let db = request.result;
+        if (!db.objectStoreNames.contains('articles')) {
+            db.createObjectStore('articles', {keyPath: 'id'});
+        }
+
+    };
+
+    request.onerror = function () {
+        console.error("Unable to access database", request.error);
+        console.log("Article Publish failed", request.error);
+    };
+
+    request.onsuccess = function () {
+        db = request.result;
+        console.log("Article Published", request.result);
+    };
+
+
+</script>
+
+<script src="js.js"></script>
+</body>
+</html>
